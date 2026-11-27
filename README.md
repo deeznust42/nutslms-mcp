@@ -187,8 +187,8 @@ reading the documents found three real graded deliverables.
   before you rely on one; `agenda` gives you the evidence to check.
 - Dates like `05-09-2026` are read day first (5 September), which is right
   outside the US.
-- The first `agenda` run reads every course document, so it is slow. Files are
-  cached afterwards.
+- `agenda` reads every course document, so it is slow. Each file is downloaded
+  to a temp folder, read and deleted straight away, so nothing piles up on disk.
 
 ## For developers
 

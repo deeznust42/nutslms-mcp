@@ -8,15 +8,15 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from .client import CACHE, Moodle, MoodleError
+from .client import Moodle, MoodleError
 from .deadlines import find_dates, upcoming
 from .extract import extract
 
-FILES = CACHE / "files"
 SCAN_EXT = {".docx", ".pptx", ".pdf", ".doc", ".ppt", ".txt", ".md", ".xlsx"}
 
 
@@ -219,20 +219,28 @@ def whats_new(m: Moodle, days: int = 7) -> list[dict]:
 # Files
 # --------------------------------------------------------------------------
 
-def _cache_path(fileurl: str, filename: str) -> Path:
-    h = hashlib.sha256(fileurl.encode()).hexdigest()[:16]
-    return FILES / h / filename
-
-
-def fetch_file(m: Moodle, fileurl: str, filename: str | None = None,
-               refresh: bool = False) -> Path:
-    filename = filename or Path(fileurl.split("?")[0]).name or "download"
+def _filename(fileurl: str, filename: str | None) -> str:
     import urllib.parse
-    filename = urllib.parse.unquote(filename)
-    p = _cache_path(fileurl, filename)
-    if p.exists() and not refresh:
-        return p
-    return m.download(fileurl, p)
+    name = filename or Path(fileurl.split("?")[0]).name or "download"
+    return urllib.parse.unquote(name)
+
+
+def fetch_text(m: Moodle, fileurl: str, filename: str | None = None) -> tuple[str, str]:
+    """Download a file to a temp folder, extract its text, then delete it.
+
+    Nothing is kept on disk, so reading course files never builds up a cache.
+    """
+    name = _filename(fileurl, filename)
+    with tempfile.TemporaryDirectory(prefix="moodle-mcp-") as d:
+        return name, extract(m.download(fileurl, Path(d) / name))
+
+
+def save_file(m: Moodle, fileurl: str, dest: Path, filename: str | None = None) -> Path:
+    """Download a file straight to dest (a file path or an existing folder)."""
+    dest = Path(dest).expanduser()
+    if dest.is_dir():
+        dest = dest / _filename(fileurl, filename)
+    return m.download(fileurl, dest)
 
 
 def find_file(m: Moodle, cmid: int | None = None, name: str | None = None,
@@ -257,14 +265,12 @@ def find_file(m: Moodle, cmid: int | None = None, name: str | None = None,
 
 def read_file(m: Moodle, fileurl: str, filename: str | None = None,
               max_chars: int = 20000) -> dict:
-    p = fetch_file(m, fileurl, filename)
-    text = extract(p)
+    name, text = fetch_text(m, fileurl, filename)
     return {
-        "filename": p.name,
+        "filename": name,
         "chars": len(text),
         "truncated": len(text) > max_chars,
         "text": text[:max_chars],
-        "cached_at": str(p),
     }
 
 
@@ -287,7 +293,7 @@ def search(m: Moodle, query: str, deep: bool = False) -> list[dict]:
                     if Path(f["filename"] or "").suffix.lower() not in SCAN_EXT:
                         continue
                     try:
-                        text = extract(fetch_file(m, f["fileurl"], f["filename"]))
+                        text = fetch_text(m, f["fileurl"], f["filename"])[1]
                     except Exception:
                         continue
                     i = text.lower().find(q)
@@ -365,7 +371,7 @@ def agenda(m: Moodle, days: int = 30, deep: bool = True,
                         if ext not in SCAN_EXT:
                             continue
                         try:
-                            text = extract(fetch_file(m, f["fileurl"], f["filename"]))
+                            text = fetch_text(m, f["fileurl"], f["filename"])[1]
                         except Exception:
                             continue
                         scanned += 1

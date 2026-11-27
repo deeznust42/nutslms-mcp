@@ -144,12 +144,7 @@ def read_document(fileurl: str, filename: str = "", max_chars: int = 20000) -> s
 @guard
 def download_file(fileurl: str, dest: str, filename: str = "") -> str:
     """Download a course file to a path on disk, authenticating automatically."""
-    p = lms.fetch_file(M(), fileurl, filename or None)
-    out = Path(dest).expanduser()
-    if out.is_dir():
-        out = out / p.name
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(p.read_bytes())
+    out = lms.save_file(M(), fileurl, Path(dest), filename or None)
     return ok({"saved_to": str(out), "bytes": out.stat().st_size})
 
 
