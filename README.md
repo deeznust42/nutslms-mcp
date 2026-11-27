@@ -206,6 +206,11 @@ Two fixes for things that break other Moodle clients on real campus servers:
 - **Responses that aren't quite JSON.** Some sites print HTML before the JSON
   body (NUST's does on every call). Parsing starts at the first JSON character.
 
+## Thanks
+
+- [Ahmad Ali Javed](https://github.com/Ahmad3752) fixed logins failing on
+  Windows with OpenSSL 3 (`UNSAFE_LEGACY_RENEGOTIATION_DISABLED`).
+
 ## Licence
 
 MIT.
