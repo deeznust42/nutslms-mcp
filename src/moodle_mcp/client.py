@@ -42,12 +42,23 @@ class MoodleError(RuntimeError):
 # TLS repair
 # --------------------------------------------------------------------------
 
+# OpenSSL's SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION; the ssl module does not name it.
+# OP_LEGACY_SERVER_CONNECT alone is not enough for lms.nust.edu.pk under OpenSSL 3:
+# the handshake still fails with UNSAFE_LEGACY_RENEGOTIATION_DISABLED.
+_ALLOW_UNSAFE_LEGACY_RENEGOTIATION = 0x40000
+
+
+def _allow_legacy_renegotiation(ctx: ssl.SSLContext) -> None:
+    if hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"):
+        ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT
+    ctx.options |= _ALLOW_UNSAFE_LEGACY_RENEGOTIATION
+
+
 def _legacy_context(cafile: Path | None = None) -> ssl.SSLContext:
     """Context tolerant of old servers but still verifying certificates."""
     ctx = ssl.create_default_context(cafile=str(cafile) if cafile else None)
     # Campus servers are often stuck on TLS 1.2 without secure renegotiation.
-    if hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"):
-        ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT
+    _allow_legacy_renegotiation(ctx)
     try:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=1")
     except ssl.SSLError:
@@ -68,8 +79,7 @@ def _peek_leaf(host: str, port: int) -> bytes | None:
     happens afterwards against the system root store.
     """
     ctx = ssl.create_default_context()
-    if hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"):
-        ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT
+    _allow_legacy_renegotiation(ctx)
     try:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
     except ssl.SSLError:

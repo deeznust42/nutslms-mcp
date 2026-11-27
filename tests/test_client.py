@@ -61,3 +61,10 @@ def test_fresh_bundle_is_not_refetched(monkeypatch, tmp_path):
     else:
         raise AssertionError("verification failure should propagate")
     assert fetches == [False]
+
+
+def test_legacy_context_allows_unsafe_legacy_renegotiation():
+    # lms.nust.edu.pk fails with UNSAFE_LEGACY_RENEGOTIATION_DISABLED without this OpenSSL option
+    ctx = client._legacy_context()
+    assert ctx.options & client._ALLOW_UNSAFE_LEGACY_RENEGOTIATION
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname  # certificates are still verified
